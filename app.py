@@ -2,7 +2,6 @@ from openai import OpenAI
 from flask import Flask, send_from_directory, request, jsonify, Response
 import re
 
-
 app = Flask(__name__)
 
 # Ruta para servir el index.html desde la carpeta dist
@@ -17,7 +16,7 @@ def serve_static(path):
 
 client = OpenAI(
     base_url = 'http://localhost:11434/v1',
-    api_key='ollama', # required, but unused
+    api_key='ollama', # requerido, pero no utilizado
 )
 
 @app.route('/analizar-riesgos', methods=['POST'])
@@ -27,7 +26,7 @@ def analizar_riesgos():
     if not activo:
         return jsonify({"error": "El campo 'activo' es necesario"}), 400
     
-    riesgos, impactos = obtener_riesgos(activo)  # Llamar a la función para obtener riesgos e impactos
+    riesgos, impactos = obtener_riesgos(activo)  # Llamar a la función mejorada
     return jsonify({"activo": activo, "riesgos": riesgos, "impactos": impactos})
 
 @app.route('/sugerir-tratamiento', methods=['POST'])
@@ -37,61 +36,71 @@ def sugerir_tratamiento():
     riesgo = data.get('riesgo')  # Extraer el valor del riesgo
     impacto = data.get('impacto')  # Extraer el valor del impacto
 
-    # Verificar que todos los campos necesarios están presentes
     if not activo or not riesgo or not impacto:
         return jsonify({"error": "Los campos 'activo', 'riesgo' e 'impacto' son necesarios"}), 400
 
-    # Combinar riesgo e impacto para formar la entrada completa para obtener_tratamiento
-    entrada_tratamiento = f"{activo};{riesgo};{impacto}"
+    # Combinar la información para darle más contexto a la IA
+    entrada_tratamiento = f"Activo: {activo}; Riesgo: {riesgo}; Impacto: {impacto}"
     tratamiento = obtener_tratamiento(entrada_tratamiento)
     
     return jsonify({"activo": activo, "riesgo": riesgo, "impacto": impacto, "tratamiento": tratamiento})
 
 
-def obtener_tratamiento( riesgo ):
+def obtener_tratamiento(riesgo_info):
     response = client.chat.completions.create(
-    model="ramiro:instruct",
-    messages=[
-    {"role": "system", "content": "Responde en español, eres una herramienta para gestion de riesgos de la iso 27000, el usuario, te ingresara un asset tecnologico, un riesgo y un impacto, tu debes responder con un posible tratamiento en menos de 200 caracteres"},
-    {"role": "user", "content": "mi telefono movil;Acceso no autorizado;un atacante puede acceder a la información personal y confidencial almacenada en el teléfono móvil, como números de teléfono, correos electrónicos y contraseñas"},
-    {"role": "assistant",  "content": "Establecer un bloqueo de la pantalla de inicio que requiera autenticación con contraseña o huella digital" },
-    {"role": "user", "content": riesgo }
-    ]
+        model="llama3",
+        messages=[
+            {"role": "system", "content": "Eres un auditor de ciberseguridad experto en ISO 27001 para el sector bancario. Basado en el activo, riesgo e impacto proporcionados, sugiere una recomendación o control de mitigación específico y accionable. Si es posible, referencia un control del Anexo A de la ISO 27001. Tu respuesta debe ser concisa, profesional y no exceder los 250 caracteres."},
+            {"role": "user", "content": "Activo: Servidor de Base de Datos; Riesgo: Fuga de datos; Impacto: Exposición de información financiera y personal de miles de clientes, resultando en multas regulatorias y daño reputacional masivo."},
+            {"role": "assistant",  "content": "Implementar cifrado a nivel de base de datos (TDE) y en tránsito (TLS). Aplicar el principio de mínimo privilegio en las cuentas de acceso, acorde al control A.9.2.3 de ISO 27001."},
+            {"role": "user", "content": riesgo_info }
+        ]
     )
     answer = response.choices[0].message.content
-        
     return answer
-def obtener_riesgos( activo ):
+
+def obtener_riesgos(activo):
     response = client.chat.completions.create(
-    model="ramiro:instruct",
-    messages=[
-    {"role": "system", "content": "Responde en español, eres una herramienta para gestion de riesgos de la iso 27000, el usuario, te ingresara un asset tecnologico y tu responderas con 5 posibles riesgos asociados en bullets."},
-    {"role": "user", "content": "mi raspberry pi"},
-    {"role": "assistant",  "content": """• **Acceso no autorizado**: terceros pueden acceder a la información almacenada o procesada en el Raspberry Pi sin permiso, lo que podría llevar a la revelación de datos confidenciales.
-
-• **Pérdida o daño de datos**: los archivos y datos almacenados en el Raspberry Pi se pierden o dañan debido a un error en el sistema, un fallo en el hardware o una acción malintencionada.
-
-• **Vulnerabilidades de seguridad**: El software o firmware instalados en el Raspberry Pi contienen vulnerabilidades de seguridad no detectadas y son explotados por un atacante.
-
-• **Inseguridad de la conexión**: la conexión del Raspberry Pi a la red local o internet no esté segura y un atacante intercepta datos confidenciales o inyecta malware en el sistema.
-
-• **Fallos hardware**: daño debido a causas como sobrecalentamiento, sobrecarga eléctrica o errores en la manufactura, lo que lleva a una pérdida de datos o inoperatividad del sistema.""" },
-    {"role": "user", "content": activo }
-  ]
-)
+        model="llama3",
+        messages=[
+            {"role": "system", "content": "Eres un auditor de ciberseguridad experto en el sector bancario y la norma ISO 27001. Para el activo de información proporcionado, identifica 5 riesgos de seguridad críticos y distintos. Describe el riesgo y su impacto potencial en el banco. Debes formatear cada uno estrictamente así, sin texto introductorio: '**Nombre del Riesgo**: Descripción detallada del impacto.'"},
+            {"role": "user", "content": "Aplicación Web de Banca"},
+            {"role": "assistant",  "content": """**Inyección SQL (SQLi)**: Un atacante podría explotar vulnerabilidades para manipular la base de datos subyacente, permitiendo el acceso, modificación o eliminación de datos sensibles de clientes, como saldos y transacciones.
+**Fallo en el Control de Acceso**: Usuarios no autorizados podrían acceder a funcionalidades o datos restringidos, como ver las cuentas de otros clientes o realizar operaciones no permitidas para su perfil.
+**Configuración de Seguridad Incorrecta**: Errores en la configuración del servidor web, como servicios innecesarios expuestos o mensajes de error detallados, podrían revelar información sensible del sistema y facilitar ataques.
+**Cross-Site Scripting (XSS)**: Permite a un atacante inyectar scripts maliciosos que se ejecutan en el navegador de otros usuarios, facilitando el robo de sesiones, credenciales y la suplantación de identidad.
+**Uso de Componentes con Vulnerabilidades Conocidas**: La utilización de librerías o frameworks de terceros desactualizados puede exponer la aplicación a vulnerabilidades ya descubiertas y explotables públicamente."""},
+            {"role": "user", "content": activo }
+        ]
+    )
     answer = response.choices[0].message.content
-    patron = r'\*\*\s*(.+?)\*\*:\s*(.+?)\.(?=\s*\n|\s*$)'
     
-    # Buscamos todos los patrones en la respuesta
-    resultados = re.findall(patron, answer)
+    # Patrón de Regex mejorado para capturar correctamente el riesgo y el impacto.
+    patron = r'\*\*(.*?)\*\*:\s*(.*?)(?=\n\*\*|\Z)'
     
+    # Buscamos todos los patrones en la respuesta, permitiendo que el impacto ocupe múltiples líneas (re.DOTALL)
+    resultados = re.findall(patron, answer, re.DOTALL)
+    
+    # Si el regex falla, intentamos un método más simple como fallback.
+    if not resultados:
+        riesgos = []
+        impactos = []
+        lines = answer.split('\n')
+        for line in lines:
+            if '**:' in line:
+                parts = line.split('**:', 1)
+                riesgo = parts[0].replace('**', '').replace('•','').strip()
+                impacto = parts[1].strip()
+                if riesgo and impacto:
+                    riesgos.append(riesgo)
+                    impactos.append(impacto)
+        return riesgos, impactos
+
     # Separamos los resultados en dos listas: riesgos e impactos
-    riesgos = [resultado[0] for resultado in resultados]
-    impactos = [resultado[1] for resultado in resultados]
+    riesgos = [resultado[0].strip() for resultado in resultados]
+    impactos = [resultado[1].strip() for resultado in resultados]
     
     return riesgos, impactos
-
-#riesgos, impactos = obtener_riesgos("mi telefono movil")
 
 if __name__ == '__main__':
     app.run(debug=True, host="0.0.0.0", port="5500")
